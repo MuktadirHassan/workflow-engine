@@ -19,10 +19,13 @@ import (
 // Execute work
 
 func main() {
-	db := db.MustOpen(os.Getenv("DB_PATH"))
+	conn := db.MustOpen(os.Getenv("DB_PATH"))
+	if err := db.Migrate(conn); err != nil {
+		panic(err)
+	}
 
 	c := coordinator.New(coordinator.Config{
-		DB: db,
+		DB: conn,
 	})
 
 	c.Run(context.Background())

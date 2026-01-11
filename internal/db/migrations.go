@@ -22,7 +22,29 @@ func Migrate(db *sql.DB) error {
             parent_job_id TEXT
         );
 
-        
+        DROP VIEW IF EXISTS job_invariants_violations;
+        CREATE VIEW job_invariants_violations AS
+        -- Violation 1: Job running with expired lease
+        SELECT id, 'running_expired_lease' as violation
+        FROM jobs
+        WHERE state = 'running' AND lease_expires_at < datetime('now')
+
+        UNION ALL
+
+        -- Violation 2: Job succeeded but not expanded for > 30s
+        SELECT id, 'succeeded_not_expanded' as violation
+        FROM jobs
+        WHERE state = 'succeeded' 
+          AND expanded = FALSE 
+          AND updated_at < datetime('now', '-30 seconds')
+
+        UNION ALL
+
+        -- Violation 3: Job exhausted attempts but not dead or succeeded
+        SELECT id, 'max_attempts_exceeded' as violation
+        FROM jobs
+        WHERE attempt >= max_attempts 
+          AND state NOT IN ('dead', 'succeeded');
         `)
 	// CREATE UNIQUE INDEX uniq_parent_job_type
 	// ON jobs(parent_job_id, job_type);

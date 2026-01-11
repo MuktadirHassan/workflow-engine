@@ -251,3 +251,27 @@ func (r *Repo) ListStuckJobs(gracePeriod time.Duration) ([]Job, error) {
 
 	return job, nil
 }
+
+type InvariantViolation struct {
+	JobID     string
+	Violation string
+}
+
+func (r *Repo) CheckInvariants() ([]InvariantViolation, error) {
+	query := `SELECT id, violation FROM job_invariants_violations`
+	rows, err := r.Db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var violations []InvariantViolation
+	for rows.Next() {
+		var v InvariantViolation
+		if err := rows.Scan(&v.JobID, &v.Violation); err != nil {
+			return nil, err
+		}
+		violations = append(violations, v)
+	}
+	return violations, rows.Err()
+}

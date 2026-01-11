@@ -38,6 +38,15 @@ func (c *coordinator) Run(ctx context.Context) {
 		default:
 		}
 
+		// check invariants
+		violations, err := c.repo.CheckInvariants()
+		if err != nil {
+			slog.Error("[coordinator] failed to check invariants", "error", err)
+		}
+		for _, v := range violations {
+			slog.Error("[coordinator] INVARIANT VIOLATION", "job_id", v.JobID, "violation", v.Violation)
+		}
+
 		// observe stuck jobs
 		stuckJobs, err := c.repo.ListStuckJobs(10 * time.Second)
 		if err != nil {
