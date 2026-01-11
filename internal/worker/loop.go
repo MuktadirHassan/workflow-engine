@@ -105,6 +105,15 @@ func (w *worker) executeJobWithToken(ctx context.Context, job *jobs.Job) {
 		}
 	}()
 
+	// FAIL FAST: Validate job before doing any expensive work
+	// Rule: Every validation that can fail cheaply must fail before ffmpeg spins up
+	// This is cost-control, not correctness
+	if err := ValidateJob(job); err != nil {
+		slog.Error("[worker] job validation failed, failing fast", "job_id", job.ID, "error", err)
+		w.repo.FailJob(job.ID, w.workerID, err)
+		return
+	}
+
 	err = w.handleJob(ctx, job)
 
 	if err != nil {
