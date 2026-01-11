@@ -40,9 +40,17 @@ type Job struct {
 	ParentJobID    *string
 }
 
-func New(jobType string, inputPath string, parentID string) Job {
+// Namespace UUID for generating deterministic job IDs
+var jobNamespace = uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+
+func NewDeterministicChildJob(jobType string, inputPath string, parentID string) Job {
+	// Generate deterministic ID from parent + job type for idempotency
+	// This ensures the same child job always gets the same ID,
+	// preventing duplicates if coordinator crashes before marking parent as expanded
+	deterministicID := uuid.NewSHA1(jobNamespace, []byte(parentID+jobType)).String()
+
 	return Job{
-		ID:          uuid.NewString(), // ← critical
+		ID:          deterministicID,
 		JobType:     JobType(jobType),
 		State:       StatePending,
 		Attempt:     0,

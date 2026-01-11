@@ -21,6 +21,10 @@ func Migrate(db *sql.DB) error {
             expanded BOOLEAN DEFAULT FALSE,
             parent_job_id TEXT
         );
-    `)
+
+        
+        `)
+	// CREATE UNIQUE INDEX uniq_parent_job_type
+	// ON jobs(parent_job_id, job_type);
 	return err
 }

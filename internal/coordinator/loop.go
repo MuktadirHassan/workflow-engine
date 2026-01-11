@@ -87,7 +87,7 @@ func (c *coordinator) nextJobsFor(job jobs.Job) []jobs.Job {
 			outputPath = *job.OutputPath
 		}
 		return []jobs.Job{
-			jobs.New("metadata", outputPath, job.ID),
+			jobs.NewDeterministicChildJob("metadata", outputPath, job.ID),
 		}
 	default:
 		return nil
