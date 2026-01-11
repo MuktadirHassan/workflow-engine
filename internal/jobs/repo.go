@@ -145,11 +145,15 @@ func (r *Repo) ReclaimExpiredLeases() error {
 	AND attempt < max_attempts;
 	`
 	rows, err := r.Db.Exec(query)
+	if err != nil {
+		return err
+	}
+
 	rowsAffected, _ := rows.RowsAffected()
 	if rowsAffected > 0 {
 		slog.Info("[coordinator] reclaimed expired leases", "count", rowsAffected)
 	}
-	return err
+	return nil
 }
 
 func (r *Repo) FindSucceededUnexpandedJobs() ([]Job, error) {
