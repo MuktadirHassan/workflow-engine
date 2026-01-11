@@ -4,8 +4,8 @@ import (
 	"context"
 	"os"
 
-	"github.com/MuktadirHassan/video-processor/internal/coordinator"
-	"github.com/MuktadirHassan/video-processor/internal/db"
+	"github.com/MuktadirHassan/workflow-engine/internal/coordinator"
+	"github.com/MuktadirHassan/workflow-engine/internal/db"
 )
 
 // Responsibilities:

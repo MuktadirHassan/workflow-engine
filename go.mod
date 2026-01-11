@@ -1,4 +1,4 @@
-module github.com/MuktadirHassan/video-processor
+module github.com/MuktadirHassan/workflow-engine
 
 go 1.25.5
 

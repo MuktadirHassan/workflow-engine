@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/MuktadirHassan/video-processor/internal/db"
-	"github.com/MuktadirHassan/video-processor/internal/worker"
+	"github.com/MuktadirHassan/workflow-engine/internal/db"
+	"github.com/MuktadirHassan/workflow-engine/internal/worker"
 )
 
 // Responsibilities:

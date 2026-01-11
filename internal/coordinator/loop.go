@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/MuktadirHassan/video-processor/internal/jobs"
+	"github.com/MuktadirHassan/workflow-engine/internal/jobs"
 )
 
 type Config struct {

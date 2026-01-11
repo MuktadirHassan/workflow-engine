@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/MuktadirHassan/video-processor/internal/jobs"
+	"github.com/MuktadirHassan/workflow-engine/internal/jobs"
 )
 
 // ValidateJob performs cheap validation checks before any expensive work

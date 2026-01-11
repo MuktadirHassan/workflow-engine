@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/MuktadirHassan/video-processor/internal/jobs"
+	"github.com/MuktadirHassan/workflow-engine/internal/jobs"
 )
 
 func (w *worker) handleJob(ctx context.Context, job *jobs.Job) error {
