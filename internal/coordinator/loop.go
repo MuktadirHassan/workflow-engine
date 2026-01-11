@@ -32,14 +32,22 @@ func New(cfg Config) *coordinator {
 
 func (c *coordinator) Run(ctx context.Context) {
 	for {
-		slog.Info("[coordinator] checking for expired leases to reclaim")
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
 
-		err := c.repo.ReclaimExpiredLeases()
+		// observe stuck jobs
+		stuckJobs, err := c.repo.ListStuckJobs(10 * time.Second)
+		if err != nil {
+			slog.Error("[coordinator] failed to list stuck jobs", "error", err)
+			continue
+		}
+
+		slog.Info("[coordinator] found stuck jobs", "count", len(stuckJobs))
+
+		err = c.repo.ReclaimExpiredLeases()
 		if err != nil {
 			slog.Error("[coordinator] failed to reclaim expired leases", "error", err)
 		}
@@ -88,6 +96,14 @@ func (c *coordinator) nextJobsFor(job jobs.Job) []jobs.Job {
 		}
 		return []jobs.Job{
 			jobs.NewDeterministicChildJob("metadata", outputPath, job.ID),
+		}
+	case "metadata":
+		return []jobs.Job{
+			jobs.NewDeterministicChildJob("thumbnail", job.InputPath, job.ID),
+		}
+	case "thumbnail":
+		return []jobs.Job{
+			jobs.NewDeterministicChildJob("encode", job.InputPath, job.ID),
 		}
 	default:
 		return nil

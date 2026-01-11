@@ -3,6 +3,7 @@ package jobs
 import (
 	"database/sql"
 	"log/slog"
+	"time"
 )
 
 type Repo struct {
@@ -145,7 +146,7 @@ func (r *Repo) ReclaimExpiredLeases() error {
 	`
 	rows, err := r.Db.Exec(query)
 	rowsAffected, _ := rows.RowsAffected()
-	if err == nil {
+	if rowsAffected > 0 {
 		slog.Info("[coordinator] reclaimed expired leases", "count", rowsAffected)
 	}
 	return err
@@ -215,4 +216,38 @@ func (r *Repo) InsertJobIfNotExists(job Job) error {
 	}
 
 	return err
+}
+
+func (r *Repo) ListStuckJobs(gracePeriod time.Duration) ([]Job, error) {
+	// stuck = running AND lease_expires_at < now - grace_period
+	query := `
+	SELECT id, video_id, job_type, state, attempt, max_attempts, lease_owner, lease_expires_at, 
+	       input_path, output_path, error, created_at, updated_at, expanded, parent_job_id
+	FROM jobs
+	WHERE state = 'running' AND lease_expires_at < DATETIME('now', '-' || ? || ' seconds');
+	`
+
+	rows, err := r.Db.Query(query, gracePeriod.Seconds())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var job []Job
+	for rows.Next() {
+		var j Job
+		err := rows.Scan(&j.ID, &j.VideoID, &j.JobType, &j.State, &j.Attempt, &j.MaxAttempts,
+			&j.LeaseOwner, &j.LeaseExpiresAt, &j.InputPath, &j.OutputPath, &j.Error,
+			&j.CreatedAt, &j.UpdatedAt, &j.Expanded, &j.ParentJobID)
+		if err != nil {
+			return nil, err
+		}
+		job = append(job, j)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return job, nil
 }
