@@ -1,1 +1,4 @@
 tmp/
+.env
+dev.db
+*.mp4
