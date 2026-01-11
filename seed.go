@@ -30,7 +30,7 @@ func seedJob(conn *sql.DB) {
 			input_path,
 			created_at, updated_at
 		) VALUES (
-			'` + jobId + `', '` + videoId + `', 'fake',
+			'` + jobId + `', '` + videoId + `', 'validate',
 			'pending',
 			0, 3,
 			'/tmp/input.mp4',

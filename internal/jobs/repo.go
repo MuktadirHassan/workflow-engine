@@ -65,7 +65,8 @@ func (r *Repo) AcquireLease(workerID string, leaseSeconds string) (*Job, error) 
 
 	// Fetch the leased job details
 	query = `
-		SELECT id, state, lease_owner, lease_expires_at, created_at, updated_at
+		SELECT id, video_id, job_type, state, attempt, max_attempts, lease_owner, lease_expires_at, 
+		       input_path, output_path, error, created_at, updated_at, expanded, parent_job_id
 		FROM jobs
 		WHERE lease_owner = ? AND state = 'running' AND id = ?
 		ORDER BY updated_at DESC
@@ -73,7 +74,9 @@ func (r *Repo) AcquireLease(workerID string, leaseSeconds string) (*Job, error) 
 	`
 	row := r.Db.QueryRow(query, workerID, jobID)
 	var job Job
-	err = row.Scan(&job.ID, &job.State, &job.LeaseOwner, &job.LeaseExpiresAt, &job.CreatedAt, &job.UpdatedAt)
+	err = row.Scan(&job.ID, &job.VideoID, &job.JobType, &job.State, &job.Attempt, &job.MaxAttempts,
+		&job.LeaseOwner, &job.LeaseExpiresAt, &job.InputPath, &job.OutputPath, &job.Error,
+		&job.CreatedAt, &job.UpdatedAt, &job.Expanded, &job.ParentJobID)
 
 	// sql: no rows in result set
 	if err == sql.ErrNoRows {
@@ -140,37 +143,44 @@ func (r *Repo) ReclaimExpiredLeases() error {
 	AND lease_expires_at < CURRENT_TIMESTAMP
 	AND attempt < max_attempts;
 	`
-	_, err := r.Db.Exec(query)
+	rows, err := r.Db.Exec(query)
+	rowsAffected, _ := rows.RowsAffected()
+	if err == nil {
+		slog.Info("[coordinator] reclaimed expired leases", "count", rowsAffected)
+	}
 	return err
 }
 
 func (r *Repo) FindSucceededUnexpandedJobs() ([]Job, error) {
 	query := `
-	SELECT id, state, lease_owner, lease_expires_at, created_at, updated_at
+	SELECT id, video_id, job_type, state, attempt, max_attempts, lease_owner, lease_expires_at, 
+	       input_path, output_path, error, created_at, updated_at, expanded, parent_job_id
 	FROM jobs
 	WHERE state = 'succeeded' AND expanded = FALSE
 	`
 	rows, err := r.Db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
 	var job []Job
 	for rows.Next() {
 		var j Job
-		err := rows.Scan(&j.ID, &j.State, &j.LeaseOwner, &j.LeaseExpiresAt, &j.CreatedAt, &j.UpdatedAt)
+		err := rows.Scan(&j.ID, &j.VideoID, &j.JobType, &j.State, &j.Attempt, &j.MaxAttempts,
+			&j.LeaseOwner, &j.LeaseExpiresAt, &j.InputPath, &j.OutputPath, &j.Error,
+			&j.CreatedAt, &j.UpdatedAt, &j.Expanded, &j.ParentJobID)
 		if err != nil {
 			return nil, err
 		}
 		job = append(job, j)
 	}
 
-	// sql: no rows in result set
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-
-	if err != nil {
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	return job, err
+	return job, nil
 }
 
 func (r *Repo) MarkJobAsExpanded(jobID string) error {
@@ -186,10 +196,23 @@ func (r *Repo) MarkJobAsExpanded(jobID string) error {
 
 func (r *Repo) InsertJobIfNotExists(job Job) error {
 	query := `
-	INSERT INTO jobs (id, video_id, job_type, state, attempt, max_attempts, input_path, output_path, created_at, updated_at)
-	SELECT ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'), DATETIME('now')
+	INSERT INTO jobs (id, video_id, job_type, state, attempt, max_attempts, input_path, output_path, 
+	                  expanded, parent_job_id, created_at, updated_at)
+	SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'), DATETIME('now')
 	WHERE NOT EXISTS (SELECT 1 FROM jobs WHERE id = ?);
 	`
-	_, err := r.Db.Exec(query, job.ID, job.VideoID, job.JobType, job.State, job.Attempt, job.MaxAttempts, job.InputPath, job.OutputPath, job.ID)
+	res, err := r.Db.Exec(query, job.ID, job.VideoID, job.JobType, job.State, job.Attempt, job.MaxAttempts,
+		job.InputPath, job.OutputPath, job.Expanded, job.ParentJobID, job.ID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		slog.Info("[coordinator] job already exists, skipping insert", "job_id", job.ID)
+	}
+
 	return err
 }

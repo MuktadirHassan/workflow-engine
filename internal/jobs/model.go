@@ -2,6 +2,8 @@ package jobs
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type JobState string
@@ -27,22 +29,28 @@ type Job struct {
 	State          JobState
 	Attempt        int
 	MaxAttempts    int
-	LeaseOwner     string
-	LeaseExpiresAt time.Time
+	LeaseOwner     *string
+	LeaseExpiresAt *time.Time
 	InputPath      string
-	OutputPath     string
-	Error          string
+	OutputPath     *string
+	Error          *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	Expanded       bool
+	ParentJobID    *string
 }
 
-func New(jobType JobType, outputPath string, jobID string) Job {
+func New(jobType string, inputPath string, parentID string) Job {
 	return Job{
-		ID:          jobID,
-		JobType:     jobType,
+		ID:          uuid.NewString(), // ← critical
+		JobType:     JobType(jobType),
 		State:       StatePending,
 		Attempt:     0,
 		MaxAttempts: 3,
-		InputPath:   outputPath,
+		InputPath:   inputPath,
+		Expanded:    false,
+		ParentJobID: &parentID,
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
 	}
 }

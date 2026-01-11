@@ -44,9 +44,7 @@ func (c *coordinator) Run(ctx context.Context) {
 			slog.Error("[coordinator] failed to reclaim expired leases", "error", err)
 		}
 
-		slog.Info("[coordinator] expanding succeeded unexpanded jobs")
 		c.expandSucceededJobs()
-		slog.Info("[coordinator] finished expanding succeeded unexpanded jobs")
 
 		slog.Info("[coordinator] sleeping for 10 seconds before next lease check")
 		time.Sleep(10 * time.Second)
@@ -65,19 +63,31 @@ func (c *coordinator) expandSucceededJobs() {
 
 		for _, nextJob := range nextJobs {
 			slog.Info("[coordinator] inserting next job", "parent_job_id", job.ID, "job_type", nextJob.JobType)
-			c.repo.InsertJobIfNotExists(nextJob)
+			err := c.repo.InsertJobIfNotExists(nextJob)
+			if err != nil {
+				slog.Error("[coordinator] failed to insert next job", "error", err)
+				return
+			}
 		}
-
+		// simulate killing the job after insert
+		// panic("simulate crash before marking job as expanded")
 		slog.Info("[coordinator] marking job as expanded", "job_id", job.ID)
-		c.repo.MarkJobAsExpanded(job.ID)
+		err := c.repo.MarkJobAsExpanded(job.ID)
+		if err != nil {
+			slog.Error("[coordinator] failed to mark job as expanded", "error", err)
+		}
 	}
 }
 
 func (c *coordinator) nextJobsFor(job jobs.Job) []jobs.Job {
 	switch job.JobType {
 	case "validate":
+		outputPath := ""
+		if job.OutputPath != nil {
+			outputPath = *job.OutputPath
+		}
 		return []jobs.Job{
-			jobs.New("metadata", job.OutputPath, job.ID),
+			jobs.New("metadata", outputPath, job.ID),
 		}
 	default:
 		return nil
