@@ -56,6 +56,13 @@ func (c *coordinator) Run(ctx context.Context) {
 
 		slog.Info("[coordinator] found stuck jobs", "count", len(stuckJobs))
 
+		// Release tokens for expired leases BEFORE reclaiming the leases
+		// This prevents token leaks when workers crash
+		err = c.repo.ReleaseTokensForExpiredLeases()
+		if err != nil {
+			slog.Error("[coordinator] failed to release tokens for expired leases", "error", err)
+		}
+
 		err = c.repo.ReclaimExpiredLeases()
 		if err != nil {
 			slog.Error("[coordinator] failed to reclaim expired leases", "error", err)

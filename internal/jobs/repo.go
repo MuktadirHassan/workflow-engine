@@ -275,3 +275,91 @@ func (r *Repo) CheckInvariants() ([]InvariantViolation, error) {
 	}
 	return violations, rows.Err()
 }
+
+// AcquireResourceToken attempts to acquire a token for the given resource.
+// Returns true if token was acquired, false if no capacity available.
+// This is atomic - the increment and capacity check happen in a single UPDATE.
+func (r *Repo) AcquireResourceToken(resourceName string) (bool, error) {
+	query := `
+	UPDATE resource_limits
+	SET current_inflight = current_inflight + 1,
+	    updated_at = DATETIME('now')
+	WHERE resource_name = ?
+	  AND current_inflight < max_concurrency;
+	`
+	res, err := r.Db.Exec(query, resourceName)
+	if err != nil {
+		return false, err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	// If rows affected = 1, we successfully acquired the token
+	// If rows affected = 0, capacity was full
+	acquired := rows == 1
+
+	if acquired {
+		slog.Info("[repo] acquired resource token", "resource", resourceName)
+	} else {
+		slog.Warn("[repo] no capacity for resource token", "resource", resourceName)
+	}
+
+	return acquired, nil
+}
+
+// ReleaseResourceToken releases a token for the given resource.
+// This is idempotent - safe to call multiple times.
+// Uses MAX to prevent negative counts from bugs (SQLite compatible).
+func (r *Repo) ReleaseResourceToken(resourceName string) error {
+	query := `
+	UPDATE resource_limits
+	SET current_inflight = MAX(current_inflight - 1, 0),
+	    updated_at = DATETIME('now')
+	WHERE resource_name = ?;
+	`
+	_, err := r.Db.Exec(query, resourceName)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("[repo] released resource token", "resource", resourceName)
+	return nil
+}
+
+// ReleaseTokensForExpiredLeases releases tokens for jobs with expired leases.
+// Called by coordinator during lease reclamation to prevent token leaks.
+func (r *Repo) ReleaseTokensForExpiredLeases() error {
+	// First, get the count of expired leases per job type
+	query := `
+	UPDATE resource_limits
+	SET current_inflight = MAX(
+	    current_inflight - (
+	        SELECT COUNT(*)
+	        FROM jobs
+	        WHERE state = 'running'
+	          AND lease_expires_at < CURRENT_TIMESTAMP
+	          AND job_type = resource_limits.resource_name
+	    ),
+	    0
+	),
+	updated_at = DATETIME('now');
+	`
+	res, err := r.Db.Exec(query)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows > 0 {
+		slog.Info("[repo] released tokens for expired leases", "resources_updated", rows)
+	}
+
+	return nil
+}

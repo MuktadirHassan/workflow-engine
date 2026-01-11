@@ -22,6 +22,22 @@ func Migrate(db *sql.DB) error {
             parent_job_id TEXT
         );
 
+
+        CREATE TABLE IF NOT EXISTS resource_limits (
+            resource_name TEXT PRIMARY KEY,  -- e.g., 'encode', 'thumbnail', 'metadata'
+            max_concurrency INTEGER NOT NULL,
+            current_inflight INTEGER NOT NULL DEFAULT 0,
+            updated_at DATETIME NOT NULL
+        );
+
+        -- Seed initial resource limits
+        INSERT OR IGNORE INTO resource_limits (resource_name, max_concurrency, updated_at)
+        VALUES 
+            ('validate', 5, DATETIME('now')),
+            ('metadata', 10, DATETIME('now')),
+            ('thumbnail', 3, DATETIME('now')),
+            ('encode', 2, DATETIME('now'));
+
         DROP VIEW IF EXISTS job_invariants_violations;
         CREATE VIEW job_invariants_violations AS
         -- Violation 1: Job running with expired lease
